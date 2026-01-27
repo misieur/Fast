@@ -80,6 +80,7 @@ jobs:
           path: artifacts/native/macos
       - name: Copy native libraries from Windows and macOS
         run: |
+          mkdir build/external-natives
           cp artifacts/native/windows/rust.dll build/external-natives/
           cp artifacts/native/macos/librust.dylib build/external-natives/
       - name: Build
