@@ -16,6 +16,7 @@ java {
 publishing {
     publications {
         create<MavenPublication>("mavenJava") {
+            artifactId = "fast"
             from(components["java"])
         }
     }
