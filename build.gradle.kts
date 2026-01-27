@@ -2,13 +2,35 @@ import org.gradle.internal.os.OperatingSystem
 
 plugins {
     id("java")
+    id("maven-publish")
 }
 
 java {
     toolchain {
         languageVersion = JavaLanguageVersion.of(21)
     }
+    withJavadocJar()
+    withSourcesJar()
 }
+
+publishing {
+    publications {
+        create<MavenPublication>("mavenJava") {
+            from(components["java"])
+        }
+    }
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/misieur/Fast")
+            credentials {
+                username = project.findProperty("gpr.user") as String? ?: System.getenv("USERNAME")
+                password = project.findProperty("gpr.key") as String? ?: System.getenv("TOKEN")
+            }
+        }
+    }
+}
+
 
 group = "dev.misieur"
 version = "1.0-SNAPSHOT"
@@ -41,14 +63,19 @@ tasks.register<Exec>("buildRust") {
     commandLine("cargo", "build", "--release")
 }
 
+val nativeDir = layout.buildDirectory.dir("external-natives")
+
 tasks.processResources {
     dependsOn("buildRust")
 
     from("rust/target/release/$libName") {
-        into("native")
+        into("natives")
     }
     from("rust/THIRD_PARTY_LICENSES.MD") {
-        into("native")
+        into("natives")
+    }
+    from(nativeDir) {
+        into("natives")
     }
     from("LICENSE.MD")
 }

@@ -12,16 +12,13 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  macOsAndWindows:
     name: Build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-            gradle_cmd: ./gradlew
-            lib: librust.so
           - os: windows-latest
             gradle_cmd: .\\gradlew.bat
             lib: rust.dll
@@ -42,11 +39,6 @@ jobs:
           toolchain: stable
       - name: Build
         run: ${{ matrix.gradle_cmd }} build
-      - name: Upload jar
-        uses: actions/upload-artifact@v4
-        with:
-          name: jar-${{ matrix.os }}
-          path: build/libs/*.jar
       - name: Prepare Artifacts
         # Always make sure files that are published contain the license files
         run: |
@@ -61,20 +53,21 @@ jobs:
           path: dist/*
 
   package:
-    name: Package All Platforms
+    name: Build ubuntu-latest and Package All Platforms
     runs-on: ubuntu-latest
-    needs: build
+    needs: macOsAndWindows
     steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
       - name: Setup Java
         uses: graalvm/setup-graalvm@v1
         with:
           java-version: '21'
           distribution: 'graalvm'
-      - name: Download Linux jar
-        uses: actions/download-artifact@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
         with:
-          name: jar-ubuntu-latest
-          path: artifacts/jar
+          toolchain: stable
       - name: Download Windows native
         uses: actions/download-artifact@v4
         with:
@@ -85,33 +78,26 @@ jobs:
         with:
           name: native-macos-latest
           path: artifacts/native/macos
-      - name: Assemble all-platform jar
+      - name: Copy native libraries from Windows and macOS
         run: |
-          set -euo pipefail
-          
-          base_jar=$(find artifacts/jar -name "*.jar" | head -n 1)
-          
-          if [ -z "$base_jar" ]; then
-            echo "Error: No JAR file found in artifacts/jar"
-            ls -R artifacts
-            exit 1
-          fi
-          
-          mkdir -p tmp/jar/native dist
-          
-          abs_jar_path="$(pwd)/$base_jar"
-          
-          cd tmp/jar
-          jar xf "$abs_jar_path"
-          cd ../..
-          
-          # Copy native libraries from Windows and macOS to the Linux Jar
-          cp artifacts/native/windows/rust.dll tmp/jar/native/
-          cp artifacts/native/macos/librust.dylib tmp/jar/native/
-          
-          jar cf dist/Fast-all-platforms.jar -C tmp/jar .
-      - name: Upload all-platform jar
+          cp artifacts/native/windows/rust.dll build/external-natives/
+          cp artifacts/native/macos/librust.dylib build/external-natives/
+      - name: Build
+        run: ./gradlew build
+      - name: Upload jar
         uses: actions/upload-artifact@v4
         with:
-          name: all-platform-jar
-          path: dist/Fast-all-platforms.jar
+          name: build
+          path: build/libs/*.jar
+      - name: Prepare Artifacts
+        # Always make sure files that are published contain the license files
+        run: |
+          mkdir dist
+          cp rust/target/release/librust.so dist/
+          cp rust/THIRD_PARTY_LICENSES.MD dist/
+          cp LICENSE.MD dist/
+      - name: Upload native library
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-ubuntu-latest
+          path: dist/*

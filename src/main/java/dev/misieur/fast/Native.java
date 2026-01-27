@@ -25,7 +25,7 @@ public class Native {
             case LINUX -> "librust.so";
             case MAC_OS -> "librust.dylib";
         };
-        String resourcePath = "/native/" + libName;
+        String resourcePath = "/natives/" + libName;
         Path tempDir = Files.createTempDirectory("fast-native-");
         Path extracted = FastFiles.extractFile(resourcePath, tempDir);
         extracted.toFile().setReadable(true);
