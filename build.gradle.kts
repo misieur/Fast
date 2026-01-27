@@ -80,6 +80,9 @@ tasks.processResources {
     from("LICENSE.MD")
 }
 
+tasks.named("publish") {
+    dependsOn("processResources")
+}
 
 configurations {
     testImplementation {
