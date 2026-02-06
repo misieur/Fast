@@ -2,13 +2,17 @@ package dev.misieur.fast;
 
 import org.jetbrains.annotations.NotNull;
 
-import java.io.*;
-import java.net.URI;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.net.URISyntaxException;
+import java.net.URL;
 import java.nio.file.*;
-import java.nio.file.FileSystem;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.Map;
+import java.util.Enumeration;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
 import java.util.stream.Stream;
 
 public class FastFiles {
@@ -104,39 +108,57 @@ public class FastFiles {
      * @throws IOException        if an I/O error occurs during extraction
      * @throws URISyntaxException if the JAR location URI is malformed
      */
-    public static void extractFolderFromJar(@NotNull String folder, @NotNull Path targetDir) throws IOException, URISyntaxException {
+    public static void extractFolderFromJar(String folder, Path targetDir) throws IOException, URISyntaxException {
         Files.createDirectories(targetDir);
 
-        URI jarUri = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE)
+        URL folderURL = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE)
                 .getCallerClass()
-                .getProtectionDomain()
-                .getCodeSource()
-                .getLocation()
-                .toURI();
+                .getClassLoader()
+                .getResource(folder);
+        if (folderURL == null) {
+            throw new IOException("Resource folder not found: " + folder);
+        }
 
-        try (FileSystem fs = FileSystems.newFileSystem(jarUri, Map.of())) {
-            Path jarFolder = fs.getPath(folder);
-
-            try (Stream<Path> paths = Files.walk(jarFolder)) {
+        if (folderURL.getProtocol().equals("file")) {
+            Path folderPath = Paths.get(folderURL.toURI());
+            try (Stream<Path> paths = Files.walk(folderPath)) {
                 paths.forEach(path -> {
                     try {
-                        Path dest = targetDir.resolve(jarFolder.relativize(path).toString());
-
+                        Path dest = targetDir.resolve(folderPath.relativize(path).toString());
                         if (Files.isDirectory(path)) {
                             Files.createDirectories(dest);
                         } else {
                             Files.createDirectories(dest.getParent());
-                            try (InputStream in = Files.newInputStream(path);
-                                 OutputStream out = Files.newOutputStream(dest)) {
-                                in.transferTo(out);
-                            }
+                            Files.copy(path, dest, StandardCopyOption.REPLACE_EXISTING);
                         }
                     } catch (IOException e) {
                         throw new UncheckedIOException(e);
                     }
                 });
             }
+        } else if (folderURL.getProtocol().equals("jar")) {
+            String jarPath = folderURL.getPath().substring(5, folderURL.getPath().indexOf("!"));
+            try (JarFile jar = new JarFile(jarPath)) {
+                Enumeration<JarEntry> entries = jar.entries();
+                while (entries.hasMoreElements()) {
+                    JarEntry entry = entries.nextElement();
+                    if (entry.getName().startsWith(folder + "/")) {
+                        Path dest = targetDir.resolve(entry.getName().substring(folder.length() + 1));
+                        if (entry.isDirectory()) {
+                            Files.createDirectories(dest);
+                        } else {
+                            Files.createDirectories(dest.getParent());
+                            try (InputStream in = jar.getInputStream(entry)) {
+                                Files.copy(in, dest, StandardCopyOption.REPLACE_EXISTING);
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            throw new UnsupportedOperationException("Unsupported protocol: " + folderURL.getProtocol());
         }
     }
+
 
 }

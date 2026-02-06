@@ -75,6 +75,14 @@ tasks.named("publish") {
     dependsOn("processResources")
 }
 
+// java -jar junit-platform-console-standalone-*.jar execute --classpath Fast-1.0-SNAPSHOT-tests.jar --classpath Fast-1.0-SNAPSHOT.jar --scan-class-path
+val testJar by tasks.registering(Jar::class) {
+    archiveClassifier.set("tests")
+    from(sourceSets.test.get().output)
+    dependsOn(tasks.testClasses)
+}
+
+
 configurations {
     testImplementation {
         extendsFrom(configurations.compileOnly.get())

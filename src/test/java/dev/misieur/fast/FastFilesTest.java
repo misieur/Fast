@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -60,6 +61,17 @@ public class FastFilesTest {
 
         FastFiles.deleteFolderSync(tempDir);
         assertFalse(Files.exists(tempDir));
+    }
+
+    @Test
+    @Order(4)
+    void testExtractFolderFromJar(@NotNull @TempDir Path tempDir) throws Exception {
+        Path folder = tempDir.resolve("folder");
+        FastFiles.extractFolderFromJar("folder", folder);
+        assertTrue(Files.exists(folder));
+        try (Stream<Path> stream = Files.list(folder)) {
+            assertEquals(1, stream.count());
+        }
     }
 
 }
