@@ -120,7 +120,13 @@ public class FastFiles {
         Path path = Paths.get(location.toURI());
 
         if (Files.isDirectory(path)) {
-            Path folderPath = path.resolve(folder);
+            URL folderURL = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE)
+                    .getCallerClass()
+                    .getClassLoader()
+                    .getResource(folder);
+            if (folderURL == null)
+                throw new IOException("Resource folder not found: " + folder);
+            Path folderPath = Paths.get(folderURL.toURI());
             if (!Files.exists(folderPath)) {
                 throw new IllegalStateException("Resource folder not found: " + folder);
             }
