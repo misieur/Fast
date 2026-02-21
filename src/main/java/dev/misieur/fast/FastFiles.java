@@ -111,39 +111,44 @@ public class FastFiles {
     public static void extractFolderFromJar(String folder, Path targetDir) throws IOException, URISyntaxException {
         Files.createDirectories(targetDir);
 
-        URL folderURL = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE)
+        URL location = StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE)
                 .getCallerClass()
-                .getClassLoader()
-                .getResource(folder);
-        if (folderURL == null) {
-            throw new IOException("Resource folder not found: " + folder);
-        }
+                .getProtectionDomain()
+                .getCodeSource()
+                .getLocation();
 
-        if (folderURL.getProtocol().equals("file")) {
-            Path folderPath = Paths.get(folderURL.toURI());
-            try (Stream<Path> paths = Files.walk(folderPath)) {
-                paths.forEach(path -> {
+        Path path = Paths.get(location.toURI());
+
+        if (Files.isDirectory(path)) {
+            Path folderPath = path.resolve(folder);
+            if (!Files.exists(folderPath)) {
+                throw new IllegalStateException("Resource folder not found: " + folder);
+            }
+            try (Stream<Path> stream = Files.walk(folderPath)) {
+                stream.forEach(p -> {
                     try {
-                        Path dest = targetDir.resolve(folderPath.relativize(path).toString());
-                        if (Files.isDirectory(path)) {
+                        Path dest = targetDir.resolve(folderPath.relativize(p).toString());
+                        if (Files.isDirectory(p))
                             Files.createDirectories(dest);
-                        } else {
+                        else {
                             Files.createDirectories(dest.getParent());
-                            Files.copy(path, dest, StandardCopyOption.REPLACE_EXISTING);
+                            Files.copy(p, dest, StandardCopyOption.REPLACE_EXISTING);
                         }
                     } catch (IOException e) {
                         throw new UncheckedIOException(e);
                     }
                 });
             }
-        } else if (folderURL.getProtocol().equals("jar")) {
-            String jarPath = folderURL.getPath().substring(5, folderURL.getPath().indexOf("!"));
-            try (JarFile jar = new JarFile(jarPath)) {
+        } else {
+            try (JarFile jar = new JarFile(path.toFile())) {
+                boolean fileFound = false;
                 Enumeration<JarEntry> entries = jar.entries();
                 while (entries.hasMoreElements()) {
                     JarEntry entry = entries.nextElement();
-                    if (entry.getName().startsWith(folder + "/")) {
-                        Path dest = targetDir.resolve(entry.getName().substring(folder.length() + 1));
+                    String name = entry.getName();
+                    if (name.startsWith(folder + "/")) {
+                        fileFound = true;
+                        Path dest = targetDir.resolve(name.substring(folder.length() + 1));
                         if (entry.isDirectory()) {
                             Files.createDirectories(dest);
                         } else {
@@ -154,9 +159,10 @@ public class FastFiles {
                         }
                     }
                 }
+                if (!fileFound) {
+                    throw new IllegalStateException("Resource folder not found: " + folder);
+                }
             }
-        } else {
-            throw new UnsupportedOperationException("Unsupported protocol: " + folderURL.getProtocol());
         }
     }
 
